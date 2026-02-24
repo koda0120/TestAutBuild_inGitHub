@@ -1,0 +1,56 @@
+name: Build WebGL and Notify Discord
+
+on:
+  push:
+    branches:
+      - main # mainブランチにPushされた時に実行します（masterブランチを使っている場合は master に変更してください）
+
+# GitHub Pagesにデプロイするための権限設定
+permissions:
+  contents: write
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      # 1. リポジトリのデータを取得
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      # 2. Unity WebGLのビルドを実行
+      - name: Build Unity WebGL
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          targetPlatform: WebGL
+          versioning: Semantic
+
+      # 3. GitHub Pagesへデプロイ
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: build/WebGL
+          force_orphan: true
+
+      # 4. Discordへ成功通知
+      - name: Notify Discord on Success
+        if: success()
+        run: |
+          # PagesのURLを自動生成
+          PAGES_URL="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/"
+
+          curl -H "Content-Type: application/json" \
+          -d "{\"content\": \"✅ WebGLビルドが完了しました！\nプレイはこちらから: $PAGES_URL\"}" \
+          ${{ secrets.DISCORD_WEBHOOK_URL }}
+
+      # 5. Discordへエラー通知（失敗した時用）
+      - name: Notify Discord on Failure
+        if: failure()
+        run: |
+          curl -H "Content-Type: application/json" \
+          -d "{\"content\": \"❌ WebGLのビルドでエラーが発生しました。GitHubのActionsタブを確認してください。\"}" \
+          ${{ secrets.DISCORD_WEBHOOK_URL }}
